@@ -1,0 +1,144 @@
+#include <stdio.h>
+#include <stdbool.h>
+
+#define MAX_PROCESSES 100
+
+struct ProcessData {
+    int Pid;
+    int Priority;
+    int ArrivalTime;
+    int BurstTime;
+    int StartTime;
+    int EndTime;
+};
+
+struct Queue {
+    struct ProcessData data[MAX_PROCESSES];
+    int front, rear;
+};
+
+void initializeQueue(struct Queue* queue) {
+    queue->front = queue->rear = -1;
+}
+
+bool isQueueEmpty(struct Queue* queue) {
+    return queue->front == -1;
+}
+
+void enqueue(struct Queue* queue, struct ProcessData process) {
+    if (queue->rear == MAX_PROCESSES - 1) {
+        printf("Queue is full.\n");
+        return;
+    }
+
+    if (queue->front == -1) {
+        queue->front = 0;
+    }
+
+    queue->rear++;
+    queue->data[queue->rear] = process;
+}
+
+struct ProcessData dequeue(struct Queue* queue) {
+    if (isQueueEmpty(queue)) {
+        printf("Queue is empty.\n");
+        struct ProcessData emptyProcess = {0, 0, 0, 0, 0, 0};
+        return emptyProcess;
+    }
+
+    struct ProcessData process = queue->data[queue->front];
+
+    if (queue->front == queue->rear) {
+        queue->front = queue->rear = -1;
+    } else {
+        queue->front++;
+    }
+
+    return process;
+}
+
+int main() {
+    struct Queue queue1, queue2;
+    initializeQueue(&queue1);
+    initializeQueue(&queue2);
+
+    int n;
+
+    printf("Enter the number of processes: ");
+    scanf("%d", &n);
+
+    struct ProcessData processes[MAX_PROCESSES];
+    struct ProcessData completedProcesses[MAX_PROCESSES];
+    int completedCount = 0;
+
+    for (int i = 0; i < n; i++) {
+        struct ProcessData process;
+        printf("Enter details for Process %d (ArrivalTime Priority BurstTime): ", i + 1);
+        scanf("%d %d %d", &process.ArrivalTime, &process.Priority, &process.BurstTime);
+        process.Pid = i + 1;
+        process.StartTime = -1;
+        process.EndTime = 0;
+
+        if (process.Priority == 0) {
+            enqueue(&queue1, process);
+        } else {
+            enqueue(&queue2, process);
+        }
+    }
+
+    int currentTime = 0;
+
+    printf("Queue 1 Processes:\n");
+    while (!isQueueEmpty(&queue1)) {
+        struct ProcessData currentProcess = dequeue(&queue1);
+
+        int waitTime = currentTime - currentProcess.ArrivalTime;
+        if (waitTime % 2 != 0) {
+            currentTime += 2 - (waitTime % 2);
+        }
+
+        currentProcess.StartTime = currentTime;
+        currentProcess.EndTime = currentTime + currentProcess.BurstTime;
+        currentTime = currentProcess.EndTime;
+
+        completedProcesses[completedCount++] = currentProcess;
+        printf("Process %d completed.\n", currentProcess.Pid);
+    }
+
+    printf("Queue 2 Processes:\n");
+    while (!isQueueEmpty(&queue2)) {
+        struct ProcessData currentProcess = dequeue(&queue2);
+        currentProcess.StartTime = currentTime;
+        int quantum = 4;
+
+        while (currentProcess.BurstTime > 0) {
+            if (currentProcess.BurstTime <= quantum) {
+                currentTime += currentProcess.BurstTime;
+                currentProcess.BurstTime = 0;
+            } else {
+                currentTime += quantum;
+                currentProcess.BurstTime -= quantum;
+                // Preempt the process and enqueue back to queue2
+                enqueue(&queue2, currentProcess);
+                printf("Process %d preempted and moved to Queue 2.\n", currentProcess.Pid);
+                break;
+            }
+        }
+
+        if (currentProcess.BurstTime == 0) {
+            currentProcess.EndTime = currentTime;
+            completedProcesses[completedCount++] = currentProcess;
+            printf("Process %d completed.\n", currentProcess.Pid);
+        }
+    }
+
+    printf("Completed Processes:\n");
+    for (int i = 0; i < completedCount; i++) {
+        printf("Process %d (ArrivalTime: %d, Priority: %d) Start Time: %d End Time: %d\n",
+            completedProcesses[i].Pid, completedProcesses[i].ArrivalTime, completedProcesses[i].Priority,
+            completedProcesses[i].StartTime, completedProcesses[i].EndTime);
+    }
+
+    return 0;
+}
+
