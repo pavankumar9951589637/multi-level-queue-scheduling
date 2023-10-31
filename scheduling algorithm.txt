@@ -1,143 +1,142 @@
 #include <stdio.h>
-#include <stdbool.h>
+#include <stdlib.h>
 
-#define MAX_PROCESSES 100
-
-struct ProcessData {
-    int Pid;
-    int Priority;
-    int ArrivalTime;
-    int BurstTime;
-    int StartTime;
-    int EndTime;
+struct Process {
+    int id;
+    int priority;
+    int burst_time;
 };
 
 struct Queue {
-    struct ProcessData data[MAX_PROCESSES];
+    struct Process* processes;
     int front, rear;
+    int size;
 };
 
-void initializeQueue(struct Queue* queue) {
-    queue->front = queue->rear = -1;
+int processCount = 0;
+
+struct Process createProcess(int id, int priority, int burst_time) {
+    struct Process p;
+    p.id = id;
+    p.priority = priority;
+    p.burst_time = burst_time;
+    return p;
 }
 
-bool isQueueEmpty(struct Queue* queue) {
-    return queue->front == -1;
+struct Queue createQueue(int size) {
+    struct Queue q;
+    q.size = size;
+    q.processes = (struct Process*)malloc(size * sizeof(struct Process));
+    q.rear = q.front = -1;
+    return q;
 }
 
-void enqueue(struct Queue* queue, struct ProcessData process) {
-    if (queue->rear == MAX_PROCESSES - 1) {
-        printf("Queue is full.\n");
+int isQueueEmpty(struct Queue* q) {
+    return (q->front == -1 && q->rear == -1);
+}
+
+int isQueueFull(struct Queue* q) {
+    return ((q->rear + 1) % q->size == q->front);
+}
+
+void enqueue(struct Queue* q, struct Process process) {
+    if (isQueueFull(q)) {
+        printf("Queue is full. Can't enqueue\n");
         return;
     }
-
-    if (queue->front == -1) {
-        queue->front = 0;
+    if (isQueueEmpty(q)) {
+        q->front = q->rear = 0;
+        q->processes[q->rear] = process;
+    } else {
+        q->rear = (q->rear + 1) % q->size;
+        q->processes[q->rear] = process;
     }
-
-    queue->rear++;
-    queue->data[queue->rear] = process;
 }
 
-struct ProcessData dequeue(struct Queue* queue) {
-    if (isQueueEmpty(queue)) {
-        printf("Queue is empty.\n");
-        struct ProcessData emptyProcess = {0, 0, 0, 0, 0, 0};
+struct Process dequeue(struct Queue* q) {
+    struct Process emptyProcess;
+    emptyProcess.id = -1;
+
+    if (isQueueEmpty(q)) {
+        printf("Queue is Empty\n");
         return emptyProcess;
     }
-
-    struct ProcessData process = queue->data[queue->front];
-
-    if (queue->front == queue->rear) {
-        queue->front = queue->rear = -1;
-    } else {
-        queue->front++;
-    }
+    struct Process process = q->processes[q->front];
+    if (q->front == q->rear) {
+        q->front = q->rear = -1;
+    } else
+        q->front = (q->front + 1) % q->size;
 
     return process;
 }
 
-int main() {
-    struct Queue queue1, queue2;
-    initializeQueue(&queue1);
-    initializeQueue(&queue2);
+void executePriorityQueue(struct Queue* q1, struct Queue* q2) {
+    struct Process processesArray[q1->size];
+    struct Process toStore;
 
-    int n;
-
-    printf("Enter the number of processes: ");
-    scanf("%d", &n);
-
-    struct ProcessData processes[MAX_PROCESSES];
-    struct ProcessData completedProcesses[MAX_PROCESSES];
-    int completedCount = 0;
-
-    for (int i = 0; i < n; i++) {
-        struct ProcessData process;
-        printf("Enter details for Process %d (ArrivalTime Priority BurstTime): ", i + 1);
-        scanf("%d %d %d", &process.ArrivalTime, &process.Priority, &process.BurstTime);
-        process.Pid = i + 1;
-        process.StartTime = -1;
-        process.EndTime = 0;
-
-        if (process.Priority == 0) {
-            enqueue(&queue1, process);
-        } else {
-            enqueue(&queue2, process);
-        }
+    while (!isQueueEmpty(q1)) {
+        processesArray[processCount] = dequeue(q1);
+        processCount++;
     }
-
-    int currentTime = 0;
-
-    printf("Queue 1 Processes:\n");
-    while (!isQueueEmpty(&queue1)) {
-        struct ProcessData currentProcess = dequeue(&queue1);
-
-        int waitTime = currentTime - currentProcess.ArrivalTime;
-        if (waitTime % 2 != 0) {
-            currentTime += 2 - (waitTime % 2);
-        }
-
-        currentProcess.StartTime = currentTime;
-        currentProcess.EndTime = currentTime + currentProcess.BurstTime;
-        currentTime = currentProcess.EndTime;
-
-        completedProcesses[completedCount++] = currentProcess;
-        printf("Process %d completed.\n", currentProcess.Pid);
-    }
-
-    printf("Queue 2 Processes:\n");
-    while (!isQueueEmpty(&queue2)) {
-        struct ProcessData currentProcess = dequeue(&queue2);
-        currentProcess.StartTime = currentTime;
-        int quantum = 4;
-
-        while (currentProcess.BurstTime > 0) {
-            if (currentProcess.BurstTime <= quantum) {
-                currentTime += currentProcess.BurstTime;
-                currentProcess.BurstTime = 0;
-            } else {
-                currentTime += quantum;
-                currentProcess.BurstTime -= quantum;
-                // Preempt the process and enqueue back to queue2
-                enqueue(&queue2, currentProcess);
-                printf("Process %d preempted and moved to Queue 2.\n", currentProcess.Pid);
-                break;
+    for (int i = 0; i < processCount - 1; i++) {
+        for (int j = i + 1; j < processCount; j++) {
+            if (processesArray[j].priority < processesArray[i].priority) {
+                struct Process temp = processesArray[i];
+                processesArray[i] = processesArray[j];
+                processesArray[j] = temp;
             }
         }
+    }
+    for (int i = 0; i < processCount; i++) {
+        toStore = processesArray[i];
+    }
+    for (int i = 0; i < processCount; i++) {
+        struct Process process = processesArray[i];
+        printf("Currently running process %d from Queue 1 (Priority: %d)\n", process.id, process.priority);
 
-        if (currentProcess.BurstTime == 0) {
-            currentProcess.EndTime = currentTime;
-            completedProcesses[completedCount++] = currentProcess;
-            printf("Process %d completed.\n", currentProcess.Pid);
+        process.burst_time -= 2;
+        if (process.burst_time == 0) {
+            printf("Process %d Executed Completely\n", process.id);
+        }
+
+        if (process.burst_time > 0) {
+            printf("Process %d Moved to Queue 2\n", process.id);
+            enqueue(q2, process);
         }
     }
+}
 
-    printf("Completed Processes:\n");
-    for (int i = 0; i < completedCount; i++) {
-        printf("Process %d (ArrivalTime: %d, Priority: %d) Start Time: %d End Time: %d\n",
-            completedProcesses[i].Pid, completedProcesses[i].ArrivalTime, completedProcesses[i].Priority,
-            completedProcesses[i].StartTime, completedProcesses[i].EndTime);
+void executeRoundRobinQueue(struct Queue* q2) {
+    struct Process toStore1;
+    while (!isQueueEmpty(q2)) {
+        toStore1 = dequeue(q2);
+        struct Process process = toStore1;
+        printf("Currently running process %d from Queue 2 (Round Robin)\n", process.id);
+        process.burst_time -= 2;
+        if (process.burst_time > 0) {
+            enqueue(q2, process);
+        }
     }
+}
+
+int main() {
+    struct Queue q1 = createQueue(50);
+    struct Queue q2 = createQueue(50);
+
+    int numProcesses;
+    printf("Enter the number of processes: ");
+    scanf("%d", &numProcesses);
+
+    for (int i = 0; i < numProcesses; i++) {
+        int id, priority, burst_time;
+        printf("Enter details for Process %d (id, priority, burst time): ", i + 1);
+        scanf("%d %d %d", &id, &priority, &burst_time);
+        struct Process p = createProcess(id, priority, burst_time);
+        enqueue(&q1, p);
+    }
+
+    executePriorityQueue(&q1, &q2);
+    executeRoundRobinQueue(&q2);
 
     return 0;
 }
