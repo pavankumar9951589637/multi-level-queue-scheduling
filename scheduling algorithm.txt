@@ -1,143 +1,115 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 
 struct Process {
-    int id;
-    int priority;
-    int burst_time;
+    int id;         // Process ID
+    int arrival;    // Arrival time
+    int burst;      // Burst time
+    int priority;   // Priority
 };
 
-struct Queue {
-    struct Process* processes;
-    int front, rear;
-    int size;
-};
+void queue1(struct Process *processes, int n) {
+    // Implement Fixed Priority Preemptive Scheduling (Queue 1)
+    // Priority 0 is the highest priority.
 
-int processCount = 0;
+    int time = 0;  // Current time
 
-struct Process createProcess(int id, int priority, int burst_time) {
-    struct Process p;
-    p.id = id;
-    p.priority = priority;
-    p.burst_time = burst_time;
-    return p;
-}
+    for (int i = 0; i < n; i++) {
+        int min_arrival_time = INT_MAX;
+        int min_arrival_index = -1;
 
-struct Queue createQueue(int size) {
-    struct Queue q;
-    q.size = size;
-    q.processes = (struct Process*)malloc(size * sizeof(struct Process));
-    q.rear = q.front = -1;
-    return q;
-}
-
-int isQueueEmpty(struct Queue* q) {
-    return (q->front == -1 && q->rear == -1);
-}
-
-int isQueueFull(struct Queue* q) {
-    return ((q->rear + 1) % q->size == q->front);
-}
-
-void enqueue(struct Queue* q, struct Process process) {
-    if (isQueueFull(q)) {
-        printf("Queue is full. Can't enqueue\n");
-        return;
-    }
-    if (isQueueEmpty(q)) {
-        q->front = q->rear = 0;
-        q->processes[q->rear] = process;
-    } else {
-        q->rear = (q->rear + 1) % q->size;
-        q->processes[q->rear] = process;
-    }
-}
-
-struct Process dequeue(struct Queue* q) {
-    struct Process emptyProcess;
-    emptyProcess.id = -1;
-
-    if (isQueueEmpty(q)) {
-        printf("Queue is Empty\n");
-        return emptyProcess;
-    }
-    struct Process process = q->processes[q->front];
-    if (q->front == q->rear) {
-        q->front = q->rear = -1;
-    } else
-        q->front = (q->front + 1) % q->size;
-
-    return process;
-}
-
-void executePriorityQueue(struct Queue* q1, struct Queue* q2) {
-    struct Process processesArray[q1->size];
-    struct Process toStore;
-
-    while (!isQueueEmpty(q1)) {
-        processesArray[processCount] = dequeue(q1);
-        processCount++;
-    }
-    for (int i = 0; i < processCount - 1; i++) {
-        for (int j = i + 1; j < processCount; j++) {
-            if (processesArray[j].priority < processesArray[i].priority) {
-                struct Process temp = processesArray[i];
-                processesArray[i] = processesArray[j];
-                processesArray[j] = temp;
+        for (int j = i; j < n; j++) {
+            if (processes[j].arrival <= time && processes[j].priority < min_arrival_time) {
+                min_arrival_time = processes[j].priority;
+                min_arrival_index = j;
             }
         }
-    }
-    for (int i = 0; i < processCount; i++) {
-        toStore = processesArray[i];
-    }
-    for (int i = 0; i < processCount; i++) {
-        struct Process process = processesArray[i];
-        printf("Currently running process %d from Queue 1 (Priority: %d)\n", process.id, process.priority);
 
-        process.burst_time -= 2;
-        if (process.burst_time == 0) {
-            printf("Process %d Executed Completely\n", process.id);
+        if (min_arrival_index == -1) {
+            continue;
         }
 
-        if (process.burst_time > 0) {
-            printf("Process %d Moved to Queue 2\n", process.id);
-            enqueue(q2, process);
+        // Execute the process for a multiple of 2 time units
+        int execute_time = (processes[min_arrival_index].burst < 2) ? processes[min_arrival_index].burst : 2;
+        processes[min_arrival_index].burst -= execute_time;
+
+        // Display the execution
+        printf("Queue 1: Process %d (Priority %d) is executing for %d units\n",
+               processes[min_arrival_index].id, processes[min_arrival_index].priority, execute_time);
+
+        time += execute_time;
+
+        // Check for preemption and move to Queue 2 if needed
+        if (processes[min_arrival_index].burst > 0) {
+            processes[min_arrival_index].priority++;  // Lower priority in Queue 2
+            printf("Queue 1: Process %d preempted and moved to Queue 2\n", processes[min_arrival_index].id);
         }
     }
 }
 
-void executeRoundRobinQueue(struct Queue* q2) {
-    struct Process toStore1;
-    while (!isQueueEmpty(q2)) {
-        toStore1 = dequeue(q2);
-        struct Process process = toStore1;
-        printf("Currently running process %d from Queue 2 (Round Robin)\n", process.id);
-        process.burst_time -= 2;
-        if (process.burst_time > 0) {
-            enqueue(q2, process);
+void queue2(struct Process *processes, int n, int time_quantum) {
+    // Implement Round Robin Scheduling for processes in Queue 2
+
+    int remaining_burst[n];  // Remaining burst time for processes
+
+    for (int i = 0; i < n; i++) {
+        remaining_burst[i] = processes[i].burst;
+    }
+
+    int time = 0;
+    int flag = 0;
+
+    while (1) {
+        flag = 0;
+        for (int i = 0; i < n; i++) {
+            if (remaining_burst[i] > 0) {
+                flag = 1;  // At least one process is remaining
+
+                if (remaining_burst[i] <= time_quantum) {
+                    // Execute the process for the remaining burst time
+                    time += remaining_burst[i];
+                    printf("Queue 2: Process %d is executing for %d units\n", processes[i].id, remaining_burst[i]);
+                    remaining_burst[i] = 0;
+                } else {
+                    // Execute the process for the specified time quantum
+                    time += time_quantum;
+                    remaining_burst[i] -= time_quantum;
+                    printf("Queue 2: Process %d is executing for %d units\n", processes[i].id, time_quantum);
+                }
+            }
+        }
+
+        if (flag == 0) {
+            break;  // All processes in Queue 2 are executed
         }
     }
 }
 
 int main() {
-    struct Queue q1 = createQueue(50);
-    struct Queue q2 = createQueue(50);
-
-    int numProcesses;
+    int n;
     printf("Enter the number of processes: ");
-    scanf("%d", &numProcesses);
+    scanf("%d", &n);
 
-    for (int i = 0; i < numProcesses; i++) {
-        int id, priority, burst_time;
-        printf("Enter details for Process %d (id, priority, burst time): ", i + 1);
-        scanf("%d %d %d", &id, &priority, &burst_time);
-        struct Process p = createProcess(id, priority, burst_time);
-        enqueue(&q1, p);
+    struct Process processes[n];
+
+    // Input process details
+    for (int i = 0; i < n; i++) {
+        processes[i].id = i + 1;
+        printf("Enter arrival time for Process %d: ", i + 1);
+        scanf("%d", &processes[i].arrival);
+        printf("Enter burst time for Process %d: ", i + 1);
+        scanf("%d", &processes[i].burst);
+        printf("Enter priority for Process %d: ", i + 1);
+        scanf("%d", &processes[i].priority);
     }
 
-    executePriorityQueue(&q1, &q2);
-    executeRoundRobinQueue(&q2);
+    int time_quantum;
+    printf("Enter time quantum for Queue 2: ");
+    scanf("%d", &time_quantum);
+
+    queue1(processes, n);  // Execute processes in Queue 1
+    queue2(processes, n, time_quantum);  // Execute processes in Queue 2
 
     return 0;
 }
-
